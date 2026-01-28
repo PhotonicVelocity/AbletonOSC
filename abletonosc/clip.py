@@ -73,23 +73,27 @@ class ClipHandler(AbletonOSCHandler):
             "end_time",
             "file_path",
             "gain_display_string",
+            "has_envelopes",
             "has_groove",
+            "is_arrangement_clip",
             "is_midi_clip",
             "is_audio_clip",
             "is_overdubbing",
             "is_playing",
             "is_recording",
+            "is_session_clip",
+            "is_take_lane_clip",
             "is_triggered",
             "length",
             "playing_position",
             "sample_length",
+            "sample_rate",
             "start_time",
             "will_record_on_start"
             ## TODO list:
-            ##"groove", ## if other than None, says "Error handling OSC message: Infered arg_value type is not supported"
-            ## is_arrangement_clip            
-            ##"warp_markers", ## "Infered arg_value type is not supported"
-            ##"view", ##"Infered arg_value type is not supported"
+            ## - "groove"; returns Groove object; needs custom serialization / API
+            ## - "warp_markers"; returns list of dicts; needs custom serialization
+            ## - "view"; returns ClipView object; needs custom serialization / API
         ]
         properties_rw = [
             "color",
@@ -166,6 +170,12 @@ class ClipHandler(AbletonOSCHandler):
         self.osc_server.add_handler("/live/clip/get/notes", create_clip_callback(clip_get_notes))
         self.osc_server.add_handler("/live/clip/add/notes", create_clip_callback(clip_add_notes))
         self.osc_server.add_handler("/live/clip/remove/notes", create_clip_callback(clip_remove_notes))
+
+        def clip_get_available_warp_modes(clip, _):
+            return tuple(int(mode) for mode in clip.available_warp_modes)
+
+        self.osc_server.add_handler("/live/clip/get/available_warp_modes",
+                                    create_clip_callback(clip_get_available_warp_modes))
 
         def clips_filter_handler(params: Tuple):
             # TODO: Pre-cache clip notes
