@@ -28,6 +28,7 @@ class ClipSlotHandler(AbletonOSCHandler):
             "fire",
             "stop",
             "create_clip",
+            "create_audio_clip",
             "delete_clip"
         ]
         properties_r = [
