@@ -194,17 +194,26 @@ class ClipHandler(AbletonOSCHandler):
                     raise ValueError("No warp markers available to infer sample_time.")
                 markers.sort(key=lambda m: m[0])
                 if beat_time <= markers[0][0]:
-                    sample_time = markers[0][1]
+                    # Extrapolate using the first two markers when before the first marker
+                    beat_a, sample_a = markers[0]
+                    beat_b, sample_b = markers[1] if len(markers) > 1 else markers[0]
                 elif beat_time >= markers[-1][0]:
-                    sample_time = markers[-1][1]
+                    # Extrapolate using the last two markers when after the last marker
+                    beat_a, sample_a = markers[-2] if len(markers) > 1 else markers[-1]
+                    beat_b, sample_b = markers[-1]
                 else:
+                    beat_a = sample_a = beat_b = sample_b = None
                     for i in range(len(markers) - 1):
                         beat_a, sample_a = markers[i]
                         beat_b, sample_b = markers[i + 1]
                         if beat_a <= beat_time <= beat_b:
-                            t = (beat_time - beat_a) / (beat_b - beat_a)
-                            sample_time = sample_a + t * (sample_b - sample_a)
                             break
+                if beat_a is not None and beat_b is not None:
+                    if beat_b == beat_a:
+                        sample_time = sample_a
+                    else:
+                        t = (beat_time - beat_a) / (beat_b - beat_a)
+                        sample_time = sample_a + t * (sample_b - sample_a)
                 if sample_time is None:
                     raise ValueError("Unable to infer sample_time from existing warp markers.")
 

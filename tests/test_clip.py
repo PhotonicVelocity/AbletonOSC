@@ -192,17 +192,13 @@ def test_clip_warp_markers_add_move_remove(client):
     assert not any(abs(beat - (beat_time + 0.05)) < 1e-6 for beat, _ in markers)
 
     # Add another marker using beat_time only (sample_time inferred)
-    # Choose midpoint between the first two existing markers.
-    markers_sorted = sorted(markers, key=lambda m: m[0])
-    if len(markers_sorted) < 2:
-        pytest.skip("Not enough warp markers to infer sample_time.")
-    beat_time_only = (markers_sorted[0][0] + markers_sorted[1][0]) / 2.0
-    before_count = len(markers_sorted)
+    beat_time_only = 0.05
+    while beat_time_only in existing_beats:
+        beat_time_only += 0.05
 
     client.send_message("/live/clip/add_warp_marker", (track_id, clip_id, beat_time_only))
     wait_one_tick()
 
     rv = client.query("/live/clip/get/warp_markers", (track_id, clip_id))
     markers = _parse_warp_markers(rv)
-    print(markers)
-    assert len(markers) == before_count + 1 or any(abs(beat - beat_time_only) < 1e-2 for beat, _ in markers)
+    assert any(abs(beat - beat_time_only) < 1e-2 for beat, _ in markers)
