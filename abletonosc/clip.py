@@ -67,7 +67,9 @@ class ClipHandler(AbletonOSCHandler):
             "fire",
             "stop",
             "duplicate_loop", 
-            "remove_notes_by_id"
+            "remove_notes_by_id",
+            "move_warp_marker",
+            "remove_warp_marker",
         ]
         properties_r = [
             "end_time",
@@ -88,7 +90,6 @@ class ClipHandler(AbletonOSCHandler):
             ## TODO list:
             ##"groove", ## if other than None, says "Error handling OSC message: Infered arg_value type is not supported"
             ## is_arrangement_clip            
-            ##"warp_markers", ## "Infered arg_value type is not supported"
             ##"view", ##"Infered arg_value type is not supported"
         ]
         properties_rw = [
@@ -167,6 +168,29 @@ class ClipHandler(AbletonOSCHandler):
         self.osc_server.add_handler("/live/clip/add/notes", create_clip_callback(clip_add_notes))
         self.osc_server.add_handler("/live/clip/remove/notes", create_clip_callback(clip_remove_notes))
 
+        def clip_get_warp_markers(clip, _):
+            markers = clip.warp_markers
+            flat: list[float] = []
+            for marker in markers:
+                flat.append(getattr(marker, "beat_time", None))
+                flat.append(getattr(marker, "sample_time", None))
+            return tuple(flat)
+
+        self.osc_server.add_handler("/live/clip/get/warp_markers",
+                                    create_clip_callback(clip_get_warp_markers))
+
+        def clip_add_warp_marker(clip, params: Tuple[Any] = ()):
+            if len(params) == 2:
+                beat_time, sample_time = params
+            else:
+                raise ValueError("Invalid number of arguments for /clip/add_warp_marker. Pass beat_time, sample_time.")
+
+            warp_marker = Live.Clip.WarpMarker(sample_time, beat_time)
+            clip.add_warp_marker(warp_marker)
+
+        self.osc_server.add_handler("/live/clip/add_warp_marker",
+                                    create_clip_callback(clip_add_warp_marker))
+        
         def clips_filter_handler(params: Tuple):
             # TODO: Pre-cache clip notes
             if len(self._clip_notes_cache) == 0:
