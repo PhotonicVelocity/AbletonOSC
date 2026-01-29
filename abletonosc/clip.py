@@ -63,33 +63,58 @@ class ClipHandler(AbletonOSCHandler):
 
             return clip_callback
 
+        def create_arrangement_clip_callback(func, *args, pass_clip_index=False):
+            """
+            Creates a callback that expects: (track_index, arrangement_clip_index, *args)
+            and targets track.arrangement_clips[clip_index].
+            """
+            def clip_callback(params: Tuple[Any]) -> Tuple:
+                track_index, clip_index = int(params[0]), int(params[1])
+                track = self.song.tracks[track_index]
+                clip = track.arrangement_clips[clip_index]
+                if pass_clip_index:
+                    rv = func(clip, *args, tuple(params[0:]))
+                else:
+                    rv = func(clip, *args, tuple(params[2:]))
+
+                if rv is not None:
+                    return (track_index, clip_index, *rv)
+
+            return clip_callback
+
         methods = [
             "fire",
             "stop",
             "duplicate_loop", 
-            "remove_notes_by_id"
+            "remove_notes_by_id",
+            "move_warp_marker",
+            "remove_warp_marker",
         ]
         properties_r = [
             "end_time",
             "file_path",
             "gain_display_string",
+            "has_envelopes",
             "has_groove",
+            "is_arrangement_clip",
             "is_midi_clip",
             "is_audio_clip",
             "is_overdubbing",
             "is_playing",
             "is_recording",
+            "is_session_clip",
+            "is_take_lane_clip",
             "is_triggered",
             "length",
             "playing_position",
             "sample_length",
+            "sample_rate",
             "start_time",
             "will_record_on_start"
             ## TODO list:
-            ##"groove", ## if other than None, says "Error handling OSC message: Infered arg_value type is not supported"
-            ## is_arrangement_clip            
-            ##"warp_markers", ## "Infered arg_value type is not supported"
-            ##"view", ##"Infered arg_value type is not supported"
+            ## - "groove"; returns Groove object; needs custom serialization / API
+            ## - "warp_markers"; returns list of dicts; needs custom serialization
+            ## - "view"; returns ClipView object; needs custom serialization / API
         ]
         properties_rw = [
             "color",
@@ -117,6 +142,8 @@ class ClipHandler(AbletonOSCHandler):
         for method in methods:
             self.osc_server.add_handler("/live/clip/%s" % method,
                                         create_clip_callback(self._call_method, method))
+            self.osc_server.add_handler("/live/arrangement_clip/%s" % method,
+                                        create_clip_callback(self._call_method, method))
 
         for prop in properties_r + properties_rw:
             self.osc_server.add_handler("/live/clip/get/%s" % prop,
@@ -125,9 +152,18 @@ class ClipHandler(AbletonOSCHandler):
                                         create_clip_callback(self._start_listen, prop, pass_clip_index=True))
             self.osc_server.add_handler("/live/clip/stop_listen/%s" % prop,
                                         create_clip_callback(self._stop_listen, prop, pass_clip_index=True))
+            self.osc_server.add_handler("/live/arrangement_clip/get/%s" % prop,
+                                        create_arrangement_clip_callback(self._get_property, prop))
+            self.osc_server.add_handler("/live/arrangement_clip/start_listen/%s" % prop,
+                                        create_arrangement_clip_callback(self._start_listen, prop, pass_clip_index=True))
+            self.osc_server.add_handler("/live/arrangement_clip/stop_listen/%s" % prop,
+                                        create_arrangement_clip_callback(self._stop_listen, prop, pass_clip_index=True))
+            
         for prop in properties_rw:
             self.osc_server.add_handler("/live/clip/set/%s" % prop,
                                         create_clip_callback(self._set_property, prop))
+            self.osc_server.add_handler("/live/arrangement_clip/set/%s" % prop,
+                                        create_arrangement_clip_callback(self._set_property, prop))
 
         def clip_get_notes(clip, params: Tuple[Any] = ()):
             if len(params) == 4:
@@ -164,8 +200,83 @@ class ClipHandler(AbletonOSCHandler):
             clip.remove_notes_extended(pitch_start, pitch_span, time_start, time_span)
 
         self.osc_server.add_handler("/live/clip/get/notes", create_clip_callback(clip_get_notes))
+        self.osc_server.add_handler("/live/arrangement_clip/get/notes",
+                                    create_arrangement_clip_callback(clip_get_notes))
         self.osc_server.add_handler("/live/clip/add/notes", create_clip_callback(clip_add_notes))
+        self.osc_server.add_handler("/live/arrangement_clip/add/notes",
+                                    create_arrangement_clip_callback(clip_add_notes))
         self.osc_server.add_handler("/live/clip/remove/notes", create_clip_callback(clip_remove_notes))
+        self.osc_server.add_handler("/live/arrangement_clip/remove/notes",
+                                    create_arrangement_clip_callback(clip_remove_notes))
+
+        def clip_get_warp_markers(clip, _):
+            markers = clip.warp_markers
+            flat: list[float] = []
+            for marker in markers:
+                flat.append(getattr(marker, "beat_time", None))
+                flat.append(getattr(marker, "sample_time", None))
+            return tuple(flat)
+
+        self.osc_server.add_handler("/live/clip/get/warp_markers",
+                                    create_clip_callback(clip_get_warp_markers))
+        self.osc_server.add_handler("/live/arrangement_clip/get/warp_markers",
+                                    create_arrangement_clip_callback(clip_get_warp_markers))
+
+        def clip_add_warp_marker(clip, params: Tuple[Any] = ()):
+            if len(params) == 1:
+                beat_time = params[0]
+                sample_time = None
+            elif len(params) == 2:
+                beat_time, sample_time = params
+            else:
+                raise ValueError("Invalid number of arguments for /clip/add_warp_marker. Pass beat_time or beat_time, sample_time.")
+
+            if sample_time is None:
+                markers = [(m.beat_time, m.sample_time) for m in clip.warp_markers]
+                if not markers:
+                    raise ValueError("No warp markers available to infer sample_time.")
+                markers.sort(key=lambda m: m[0])
+                if beat_time <= markers[0][0]:
+                    # Extrapolate using the first two markers when before the first marker
+                    beat_a, sample_a = markers[0]
+                    beat_b, sample_b = markers[1] if len(markers) > 1 else markers[0]
+                elif beat_time >= markers[-1][0]:
+                    # Extrapolate using the last two markers when after the last marker
+                    beat_a, sample_a = markers[-2] if len(markers) > 1 else markers[-1]
+                    beat_b, sample_b = markers[-1]
+                else:
+                    beat_a = sample_a = beat_b = sample_b = None
+                    for i in range(len(markers) - 1):
+                        beat_a, sample_a = markers[i]
+                        beat_b, sample_b = markers[i + 1]
+                        if beat_a <= beat_time <= beat_b:
+                            break
+                if beat_a is not None and beat_b is not None:
+                    if beat_b == beat_a:
+                        sample_time = sample_a
+                    else:
+                        t = (beat_time - beat_a) / (beat_b - beat_a)
+                        sample_time = sample_a + t * (sample_b - sample_a)
+                if sample_time is None:
+                    raise ValueError("Unable to infer sample_time from existing warp markers.")
+
+            warp_marker = Live.Clip.WarpMarker(sample_time, beat_time)
+            clip.add_warp_marker(warp_marker)
+
+        self.osc_server.add_handler("/live/clip/add_warp_marker",
+                                    create_clip_callback(clip_add_warp_marker))
+        self.osc_server.add_handler("/live/arrangement_clip/add_warp_marker",
+                                    create_arrangement_clip_callback(clip_add_warp_marker))
+
+
+        def clip_get_available_warp_modes(clip, _):
+            return tuple(int(mode) for mode in clip.available_warp_modes)
+
+        self.osc_server.add_handler("/live/clip/get/available_warp_modes",
+                                    create_clip_callback(clip_get_available_warp_modes))
+        self.osc_server.add_handler("/live/arrangement_clip/get/available_warp_modes",
+                                    create_arrangement_clip_callback(clip_get_available_warp_modes))
+
 
         def clips_filter_handler(params: Tuple):
             # TODO: Pre-cache clip notes

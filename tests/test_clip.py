@@ -143,3 +143,62 @@ def test_clip_listen_lifecycle(client):
     client.send_message("/live/clip/set/name", [0, 0, "Alpha"])
     assert client.await_message("/live/clip/get/name", TICK_DURATION * 2) == (0, 0, "Alpha")
     client.send_message("/live/clip/stop_listen/name", [0, 0])
+
+
+def _parse_warp_markers(rv):
+    # rv is (track_id, clip_id, beat_time_1, sample_time_1, ...)
+    values = rv[2:]
+    return [(values[i], values[i + 1]) for i in range(0, len(values), 2)]
+
+
+def test_clip_warp_markers_add_move_remove(client):
+    track_id = 2
+    clip_id = 0
+
+    rv = client.query("/live/clip/get/warp_markers", (track_id, clip_id))
+    markers = _parse_warp_markers(rv)
+    existing_beats = {beat for beat, _ in markers}
+
+    # The fixture records a very short clip (~0.075s). At 120 BPM, 0.075s = 0.15 beats.
+    # Keep beat_time/sample_time small so they stay in range.
+    beat_time = 0.05
+    while beat_time in existing_beats:
+        beat_time += 0.05
+
+    sample_time = 0.025
+    client.send_message("/live/clip/add_warp_marker", (track_id, clip_id, beat_time, sample_time))
+    wait_one_tick()
+
+    rv = client.query("/live/clip/get/warp_markers", (track_id, clip_id))
+    markers = _parse_warp_markers(rv)
+    assert any(abs(beat - beat_time) < 1e-6 and abs(sample - sample_time) < 1e-6
+               for beat, sample in markers)
+
+    # Move marker by +0.05 beat
+    client.send_message("/live/clip/move_warp_marker", (track_id, clip_id, beat_time, 0.05))
+    wait_one_tick()
+
+    rv = client.query("/live/clip/get/warp_markers", (track_id, clip_id))
+    markers = _parse_warp_markers(rv)
+    assert any(abs(beat - (beat_time + 0.05)) < 1e-6 and abs(sample - sample_time) < 1e-6
+               for beat, sample in markers)
+
+    # Remove moved marker
+    client.send_message("/live/clip/remove_warp_marker", (track_id, clip_id, beat_time + 0.05))
+    wait_one_tick()
+
+    rv = client.query("/live/clip/get/warp_markers", (track_id, clip_id))
+    markers = _parse_warp_markers(rv)
+    assert not any(abs(beat - (beat_time + 0.05)) < 1e-6 for beat, _ in markers)
+
+    # Add another marker using beat_time only (sample_time inferred)
+    beat_time_only = 0.05
+    while beat_time_only in existing_beats:
+        beat_time_only += 0.05
+
+    client.send_message("/live/clip/add_warp_marker", (track_id, clip_id, beat_time_only))
+    wait_one_tick()
+
+    rv = client.query("/live/clip/get/warp_markers", (track_id, clip_id))
+    markers = _parse_warp_markers(rv)
+    assert any(abs(beat - beat_time_only) < 1e-2 for beat, _ in markers)
