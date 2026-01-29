@@ -63,6 +63,25 @@ class ClipHandler(AbletonOSCHandler):
 
             return clip_callback
 
+        def create_arrangement_clip_callback(func, *args, pass_clip_index=False):
+            """
+            Creates a callback that expects: (track_index, arrangement_clip_index, *args)
+            and targets track.arrangement_clips[clip_index].
+            """
+            def clip_callback(params: Tuple[Any]) -> Tuple:
+                track_index, clip_index = int(params[0]), int(params[1])
+                track = self.song.tracks[track_index]
+                clip = track.arrangement_clips[clip_index]
+                if pass_clip_index:
+                    rv = func(clip, *args, tuple(params[0:]))
+                else:
+                    rv = func(clip, *args, tuple(params[2:]))
+
+                if rv is not None:
+                    return (track_index, clip_index, *rv)
+
+            return clip_callback
+
         methods = [
             "fire",
             "stop",
@@ -117,6 +136,8 @@ class ClipHandler(AbletonOSCHandler):
         for method in methods:
             self.osc_server.add_handler("/live/clip/%s" % method,
                                         create_clip_callback(self._call_method, method))
+            self.osc_server.add_handler("/live/arrangement_clip/%s" % method,
+                                        create_clip_callback(self._call_method, method))
 
         for prop in properties_r + properties_rw:
             self.osc_server.add_handler("/live/clip/get/%s" % prop,
@@ -125,9 +146,18 @@ class ClipHandler(AbletonOSCHandler):
                                         create_clip_callback(self._start_listen, prop, pass_clip_index=True))
             self.osc_server.add_handler("/live/clip/stop_listen/%s" % prop,
                                         create_clip_callback(self._stop_listen, prop, pass_clip_index=True))
+            self.osc_server.add_handler("/live/arrangement_clip/get/%s" % prop,
+                                        create_arrangement_clip_callback(self._get_property, prop))
+            self.osc_server.add_handler("/live/arrangement_clip/start_listen/%s" % prop,
+                                        create_arrangement_clip_callback(self._start_listen, prop, pass_clip_index=True))
+            self.osc_server.add_handler("/live/arrangement_clip/stop_listen/%s" % prop,
+                                        create_arrangement_clip_callback(self._stop_listen, prop, pass_clip_index=True))
+            
         for prop in properties_rw:
             self.osc_server.add_handler("/live/clip/set/%s" % prop,
                                         create_clip_callback(self._set_property, prop))
+            self.osc_server.add_handler("/live/arrangement_clip/set/%s" % prop,
+                                        create_arrangement_clip_callback(self._set_property, prop))
 
         def clip_get_notes(clip, params: Tuple[Any] = ()):
             if len(params) == 4:
@@ -164,8 +194,15 @@ class ClipHandler(AbletonOSCHandler):
             clip.remove_notes_extended(pitch_start, pitch_span, time_start, time_span)
 
         self.osc_server.add_handler("/live/clip/get/notes", create_clip_callback(clip_get_notes))
+        self.osc_server.add_handler("/live/arrangement_clip/get/notes",
+                                    create_arrangement_clip_callback(clip_get_notes))
         self.osc_server.add_handler("/live/clip/add/notes", create_clip_callback(clip_add_notes))
+        self.osc_server.add_handler("/live/arrangement_clip/add/notes",
+                                    create_arrangement_clip_callback(clip_add_notes))
         self.osc_server.add_handler("/live/clip/remove/notes", create_clip_callback(clip_remove_notes))
+        self.osc_server.add_handler("/live/arrangement_clip/remove/notes",
+                                    create_arrangement_clip_callback(clip_remove_notes))
+
 
         def clips_filter_handler(params: Tuple):
             # TODO: Pre-cache clip notes

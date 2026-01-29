@@ -345,7 +345,7 @@ A Clip Slot represents a container for a clip. It is used to create and delete c
 
 ## Clip API
 
-Represents an audio or MIDI clip. Can be used to start/stop clips, and query/modify their notes, name, gain, pitch, color, playing state/position, etc.
+Represents an audio or MIDI clip in session view. Can be used to start/stop clips, and query/modify their notes, name, gain, pitch, color, playing state/position, etc.
 
 <details>
 <summary><b>Documentation</b>: Clip API</summary>
@@ -412,6 +412,13 @@ Represents an audio or MIDI clip. Can be used to start/stop clips, and query/mod
 | /live/clip/set/end_marker                | track_id, clip_id, end_marker                                       |                                                                                        | Set clip's end marker, expressed in floating-point beats                                                                                                 |
 
 </details>
+
+---
+
+## Arrangement Clip API
+
+Represents an audio or MIDI clip in Arrangement view. Endpoints mirror `/live/clip/*` but use the
+`/live/arrangement_clip/*` namespace and index into `track.arrangement_clips`.
 
 ---
 
@@ -557,4 +564,3 @@ For code contributions and feedback, many thanks to:
 - Mark Marijnissen ([markmarijnissen](https://github.com/markmarijnissen))
 - [capturcus](https://github.com/capturcus)
 - Esa Ruoho a.k.a. Lackluster ([esaruoho](https://github.com/esaruoho))
-
