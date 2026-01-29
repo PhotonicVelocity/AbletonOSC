@@ -33,7 +33,7 @@ class ClipSlotHandler(AbletonOSCHandler):
           # "duplicate_clip_slot",  # Uses custom handler
             "set_fire_button_state",
         ]
-        properties = [  # (name, writeable, observable)
+        properties = [  # (name, writable, observable)
             ("color", 0, 1),                 # Only for Group Track slots
             ("color_index", 0, 1),           # Only for Group Track slots
             ("controls_other_clips", 0, 1),  # Only for Group Track slots
@@ -51,10 +51,10 @@ class ClipSlotHandler(AbletonOSCHandler):
             self.osc_server.add_handler("/live/clip_slot/%s" % method,
                                         create_clip_slot_callback(self._call_method, method))
 
-        for prop, writeable, observable in properties:
+        for prop, writable, observable in properties:
             self.osc_server.add_handler("/live/clip_slot/get/%s" % prop,
                                         create_clip_slot_callback(self._get_property, prop))
-            if writeable:
+            if writable:
                 self.osc_server.add_handler("/live/clip_slot/set/%s" % prop,
                                             create_clip_slot_callback(self._set_property, prop))
             if observable:
