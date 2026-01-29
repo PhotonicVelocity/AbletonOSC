@@ -29,35 +29,39 @@ class ClipSlotHandler(AbletonOSCHandler):
             "stop",
             "create_clip",
             "create_audio_clip",
-            "delete_clip"
+            "delete_clip",
+          # "duplicate_clip_slot",  # Uses custom handler
+            "set_fire_button_state",
         ]
-        properties_r = [
-            "has_clip",
-            "controls_other_clips",
-            "is_group_slot",
-            "is_playing",
-            "is_triggered",
-            "playing_status",
-            "will_record_on_start",
-        ]
-        properties_rw = [
-            "has_stop_button"
+        properties = [  # (name, writable, observable)
+            ("color", 0, 1),                 # Only for Group Track slots
+            ("color_index", 0, 1),           # Only for Group Track slots
+            ("controls_other_clips", 0, 1),  # Only for Group Track slots
+            ("has_clip", 0, 1),
+            ("has_stop_button", 1, 1),
+            ("is_group_slot", 0, 0),
+            ("is_playing", 0, 0),
+            ("is_recording", 0, 0),
+            ("is_triggered", 0, 1),
+            ("playing_status", 0, 1),        # Only for Group Track slots
+            ("will_record_on_start", 0, 0),
         ]
 
         for method in methods:
             self.osc_server.add_handler("/live/clip_slot/%s" % method,
                                         create_clip_slot_callback(self._call_method, method))
 
-        for prop in properties_r + properties_rw:
+        for prop, writable, observable in properties:
             self.osc_server.add_handler("/live/clip_slot/get/%s" % prop,
                                         create_clip_slot_callback(self._get_property, prop))
-            self.osc_server.add_handler("/live/clip_slot/start_listen/%s" % prop,
-                                        create_clip_slot_callback(self._start_listen, prop, pass_clip_index=True))
-            self.osc_server.add_handler("/live/clip_slot/stop_listen/%s" % prop,
-                                        create_clip_slot_callback(self._stop_listen, prop, pass_clip_index=True))
-        for prop in properties_rw:
-            self.osc_server.add_handler("/live/clip_slot/set/%s" % prop,
-                                        create_clip_slot_callback(self._set_property, prop))
+            if writable:
+                self.osc_server.add_handler("/live/clip_slot/set/%s" % prop,
+                                            create_clip_slot_callback(self._set_property, prop))
+            if observable:
+                self.osc_server.add_handler("/live/clip_slot/start_listen/%s" % prop,
+                                            create_clip_slot_callback(self._start_listen, prop, pass_clip_index=True))
+                self.osc_server.add_handler("/live/clip_slot/stop_listen/%s" % prop,
+                                            create_clip_slot_callback(self._stop_listen, prop, pass_clip_index=True))
 
         def duplicate_clip_slot(clip_slot, args):
             target_track_index, target_clip_index = tuple(args)

@@ -1,4 +1,5 @@
 from . import client, wait_one_tick, TICK_DURATION
+import time
 
 def test_clip_slot_has_clip(client):
     assert client.query("/live/clip_slot/get/has_clip", (0, 0)) == (0, 0, False)
@@ -22,6 +23,22 @@ def test_clip_slot_duplicate(client):
     client.send_message("/live/clip_slot/delete_clip", [0, 0])
     client.send_message("/live/clip_slot/delete_clip", [0, 2])
 
+def test_clip_slot_fire_stop(client):
+    client.send_message("/live/clip_slot/create_clip", [0, 0, 4.0])
+    # need delays since fire/stop doesn't trigger immediately
+    client.send_message("/live/clip_slot/fire", (0, 0))
+    time.sleep(2)
+    assert client.query("/live/clip/get/is_playing", (0, 0)) == (0, 0, True)
+    client.send_message("/live/clip_slot/stop", (0, 0))
+    time.sleep(2)
+    assert client.query("/live/clip/get/is_playing", (0, 0)) == (0, 0, False)
+    client.send_message("/live/clip_slot/set_fire_button_state", (0, 0, 1))
+    time.sleep(2)
+    assert client.query("/live/clip/get/is_playing", (0, 0)) == (0, 0, True)
+    client.send_message("/live/clip_slot/stop", (0, 0))  # set_fire_button_state to 0 does nothing.
+    client.send_message("/live/clip_slot/delete_clip", [0, 0])
+
+
 def test_clip_slot_property_listen(client):
     client.send_message("/live/clip_slot/start_listen/has_clip", (0, 0))
     assert client.await_message("/live/clip_slot/get/has_clip", TICK_DURATION * 2) == (0, 0, False)
@@ -29,4 +46,50 @@ def test_clip_slot_property_listen(client):
     assert client.await_message("/live/clip_slot/get/has_clip", TICK_DURATION * 2) == (0, 0, True)
     client.send_message("/live/clip_slot/delete_clip", [0, 0])
     assert client.await_message("/live/clip_slot/get/has_clip", TICK_DURATION * 2) == (0, 0, False)
-    client.send_message("/live/clip_slot/stop_listen/has_clip", (0,))
+    client.send_message("/live/clip_slot/stop_listen/has_clip", (0, 0))
+
+def _assert_clip_slot_get(client, prop, track_index=0, clip_index=0):
+    rv = client.query(f"/live/clip_slot/get/{prop}", (track_index, clip_index))
+    assert rv[0] == track_index and rv[1] == clip_index
+
+def test_clip_slot_endpoints(client):
+    client.send_message("/live/clip_slot/create_clip", [0, 0, 4.0])
+
+    # get read_only properties
+    for prop in [
+        "color",
+        "color_index",
+        "controls_other_clips",
+        "has_clip",
+        "has_stop_button",
+        "is_group_slot",
+        "is_playing",
+        "is_recording",
+        "is_triggered",
+        "playing_status",
+        "will_record_on_start",
+    ]:
+        _assert_clip_slot_get(client, prop, 0, 0)
+
+    # set has_stop_button (rw property)
+    client.send_message("/live/clip_slot/set/has_stop_button", (0, 0, 1))
+    assert client.query("/live/clip_slot/get/has_stop_button", (0, 0)) == (0, 0, True)
+    client.send_message("/live/clip_slot/set/has_stop_button", (0, 0, 0))
+    assert client.query("/live/clip_slot/get/has_stop_button", (0, 0)) == (0, 0, False)
+
+    # check listeners are created
+    for prop in [
+        "color",
+        "color_index",
+        "controls_other_clips",
+        "has_clip",
+        "has_stop_button",
+        "is_triggered",
+        "playing_status",
+    ]:
+        client.send_message(f"/live/clip_slot/start_listen/{prop}", (0, 0))
+        rv = client.await_message(f"/live/clip_slot/get/{prop}", TICK_DURATION * 2)
+        assert rv[0] == 0 and rv[1] == 0
+        client.send_message(f"/live/clip_slot/stop_listen/{prop}", (0, 0))
+
+    client.send_message("/live/clip_slot/delete_clip", [0, 0])
