@@ -207,7 +207,7 @@ class ClipHandler(AbletonOSCHandler):
                                     create_arrangement_clip_callback(clip_add_notes))
         self.osc_server.add_handler("/live/clip/remove/notes", create_clip_callback(clip_remove_notes))
         self.osc_server.add_handler("/live/arrangement_clip/remove/notes",
-                            create_arrangement_clip_callback(clip_remove_notes))
+                                    create_arrangement_clip_callback(clip_remove_notes))
 
         def clip_get_warp_markers(clip, _):
             markers = clip.warp_markers
@@ -219,6 +219,8 @@ class ClipHandler(AbletonOSCHandler):
 
         self.osc_server.add_handler("/live/clip/get/warp_markers",
                                     create_clip_callback(clip_get_warp_markers))
+        self.osc_server.add_handler("/live/arrangement_clip/get/warp_markers",
+                                    create_arrangement_clip_callback(clip_get_warp_markers))
 
         def clip_add_warp_marker(clip, params: Tuple[Any] = ()):
             if len(params) == 1:
@@ -263,6 +265,8 @@ class ClipHandler(AbletonOSCHandler):
 
         self.osc_server.add_handler("/live/clip/add_warp_marker",
                                     create_clip_callback(clip_add_warp_marker))
+        self.osc_server.add_handler("/live/arrangement_clip/add_warp_marker",
+                                    create_arrangement_clip_callback(clip_add_warp_marker))
 
 
         def clip_get_available_warp_modes(clip, _):
@@ -270,6 +274,9 @@ class ClipHandler(AbletonOSCHandler):
 
         self.osc_server.add_handler("/live/clip/get/available_warp_modes",
                                     create_clip_callback(clip_get_available_warp_modes))
+        self.osc_server.add_handler("/live/arrangement_clip/get/available_warp_modes",
+                                    create_arrangement_clip_callback(clip_get_available_warp_modes))
+
 
         def clips_filter_handler(params: Tuple):
             # TODO: Pre-cache clip notes
