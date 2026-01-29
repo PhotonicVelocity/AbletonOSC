@@ -86,7 +86,9 @@ class ClipHandler(AbletonOSCHandler):
             "fire",
             "stop",
             "duplicate_loop", 
-            "remove_notes_by_id"
+            "remove_notes_by_id",
+            "move_warp_marker",
+            "remove_warp_marker",
         ]
         properties_r = [
             "end_time",
@@ -205,7 +207,62 @@ class ClipHandler(AbletonOSCHandler):
                                     create_arrangement_clip_callback(clip_add_notes))
         self.osc_server.add_handler("/live/clip/remove/notes", create_clip_callback(clip_remove_notes))
         self.osc_server.add_handler("/live/arrangement_clip/remove/notes",
-                                    create_arrangement_clip_callback(clip_remove_notes))
+                            create_arrangement_clip_callback(clip_remove_notes))
+
+        def clip_get_warp_markers(clip, _):
+            markers = clip.warp_markers
+            flat: list[float] = []
+            for marker in markers:
+                flat.append(getattr(marker, "beat_time", None))
+                flat.append(getattr(marker, "sample_time", None))
+            return tuple(flat)
+
+        self.osc_server.add_handler("/live/clip/get/warp_markers",
+                                    create_clip_callback(clip_get_warp_markers))
+
+        def clip_add_warp_marker(clip, params: Tuple[Any] = ()):
+            if len(params) == 1:
+                beat_time = params[0]
+                sample_time = None
+            elif len(params) == 2:
+                beat_time, sample_time = params
+            else:
+                raise ValueError("Invalid number of arguments for /clip/add_warp_marker. Pass beat_time or beat_time, sample_time.")
+
+            if sample_time is None:
+                markers = [(m.beat_time, m.sample_time) for m in clip.warp_markers]
+                if not markers:
+                    raise ValueError("No warp markers available to infer sample_time.")
+                markers.sort(key=lambda m: m[0])
+                if beat_time <= markers[0][0]:
+                    # Extrapolate using the first two markers when before the first marker
+                    beat_a, sample_a = markers[0]
+                    beat_b, sample_b = markers[1] if len(markers) > 1 else markers[0]
+                elif beat_time >= markers[-1][0]:
+                    # Extrapolate using the last two markers when after the last marker
+                    beat_a, sample_a = markers[-2] if len(markers) > 1 else markers[-1]
+                    beat_b, sample_b = markers[-1]
+                else:
+                    beat_a = sample_a = beat_b = sample_b = None
+                    for i in range(len(markers) - 1):
+                        beat_a, sample_a = markers[i]
+                        beat_b, sample_b = markers[i + 1]
+                        if beat_a <= beat_time <= beat_b:
+                            break
+                if beat_a is not None and beat_b is not None:
+                    if beat_b == beat_a:
+                        sample_time = sample_a
+                    else:
+                        t = (beat_time - beat_a) / (beat_b - beat_a)
+                        sample_time = sample_a + t * (sample_b - sample_a)
+                if sample_time is None:
+                    raise ValueError("Unable to infer sample_time from existing warp markers.")
+
+            warp_marker = Live.Clip.WarpMarker(sample_time, beat_time)
+            clip.add_warp_marker(warp_marker)
+
+        self.osc_server.add_handler("/live/clip/add_warp_marker",
+                                    create_clip_callback(clip_add_warp_marker))
 
 
         def clip_get_available_warp_modes(clip, _):
