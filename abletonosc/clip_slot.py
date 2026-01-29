@@ -29,7 +29,6 @@ class ClipSlotHandler(AbletonOSCHandler):
             "stop",
             "create_clip",
             "create_audio_clip",
-            "create_audio_clip",
             "delete_clip",
           # "duplicate_clip_slot",  # Uses custom handler
             "set_fire_button_state",
