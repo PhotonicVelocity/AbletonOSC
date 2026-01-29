@@ -180,10 +180,33 @@ class ClipHandler(AbletonOSCHandler):
                                     create_clip_callback(clip_get_warp_markers))
 
         def clip_add_warp_marker(clip, params: Tuple[Any] = ()):
-            if len(params) == 2:
+            if len(params) == 1:
+                beat_time = params[0]
+                sample_time = None
+            elif len(params) == 2:
                 beat_time, sample_time = params
             else:
-                raise ValueError("Invalid number of arguments for /clip/add_warp_marker. Pass beat_time, sample_time.")
+                raise ValueError("Invalid number of arguments for /clip/add_warp_marker. Pass beat_time or beat_time, sample_time.")
+
+            if sample_time is None:
+                markers = [(m.beat_time, m.sample_time) for m in clip.warp_markers]
+                if not markers:
+                    raise ValueError("No warp markers available to infer sample_time.")
+                markers.sort(key=lambda m: m[0])
+                if beat_time <= markers[0][0]:
+                    sample_time = markers[0][1]
+                elif beat_time >= markers[-1][0]:
+                    sample_time = markers[-1][1]
+                else:
+                    for i in range(len(markers) - 1):
+                        beat_a, sample_a = markers[i]
+                        beat_b, sample_b = markers[i + 1]
+                        if beat_a <= beat_time <= beat_b:
+                            t = (beat_time - beat_a) / (beat_b - beat_a)
+                            sample_time = sample_a + t * (sample_b - sample_a)
+                            break
+                if sample_time is None:
+                    raise ValueError("Unable to infer sample_time from existing warp markers.")
 
             warp_marker = Live.Clip.WarpMarker(sample_time, beat_time)
             clip.add_warp_marker(warp_marker)
