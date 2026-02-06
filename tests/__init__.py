@@ -23,7 +23,7 @@ def client() -> AbletonOSCClient:
     yield client
     client.stop()
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="function")
 def silent_audio_file() -> Path:
     """
     Create a silent WAV file in the tests directory for audio-clip tests.
@@ -47,6 +47,7 @@ def silent_audio_file() -> Path:
                 wf.writeframes(silence_chunk[: frames * sample_width])
                 frames_remaining -= frames
     yield path
+    remove_audio_file(path)
 
 def wait_one_tick():
     """
