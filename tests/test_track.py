@@ -81,29 +81,38 @@ def test_track_devices(client):
 
 def test_track_listen_playing_slot_index(client):
     # 1/16th quantize
-    client.send_message("/live/song/set/clip_trigger_quantization", (11,))
-    for track_id, clip_id in itertools.product((0, 1), (0, 1)):
-        client.send_message("/live/clip_slot/create_clip", (track_id, clip_id, 4))
+    try:
+        client.send_message("/live/song/set/clip_trigger_quantization", (11,))
+        for track_id, clip_id in itertools.product((0, 1), (0, 1)):
+            client.send_message("/live/clip_slot/create_clip", (track_id, clip_id, 4))
 
-    client.send_message("/live/track/start_listen/playing_slot_index", (0,))
-    assert client.await_message("/live/track/get/playing_slot_index", TICK_DURATION * 2) == (0, -1,)
-    client.send_message("/live/track/start_listen/playing_slot_index", (1,))
-    assert client.await_message("/live/track/get/playing_slot_index", TICK_DURATION * 2) == (1, -1,)
+        # -2 = Clip Stop slot fired; -1 = arrangement recording with no session clip playing
+        # Depending on test order, either may be returned.
+        client.send_message("/live/track/start_listen/playing_slot_index", (0,))
+        msg = client.await_message("/live/track/get/playing_slot_index", TICK_DURATION * 2)
+        assert msg[0] == 0 and msg[1] in (-1, -2)
+        client.send_message("/live/track/start_listen/playing_slot_index", (1,))
+        msg = client.await_message("/live/track/get/playing_slot_index", TICK_DURATION * 2)
+        assert msg[0] == 1 and msg[1] in (-1, -2)
 
-    client.send_message("/live/clip_slot/fire", (0, 0))
-    assert client.await_message("/live/track/get/playing_slot_index", TICK_DURATION * 2) == (0, 0,)
+        client.send_message("/live/clip_slot/fire", (0, 0))
+        assert client.await_message("/live/track/get/playing_slot_index", TICK_DURATION * 2) == (0, 0,)
 
-    client.send_message("/live/clip_slot/fire", (0, 1))
-    assert client.await_message("/live/track/get/playing_slot_index", TICK_DURATION * 2) == (0, 1,)
+        client.send_message("/live/clip_slot/fire", (0, 1))
+        assert client.await_message("/live/track/get/playing_slot_index", TICK_DURATION * 2) == (0, 1,)
 
-    client.send_message("/live/clip_slot/fire", (1, 1))
-    assert client.await_message("/live/track/get/playing_slot_index", TICK_DURATION * 2) == (1, 1,)
+        client.send_message("/live/clip_slot/fire", (1, 1))
+        assert client.await_message("/live/track/get/playing_slot_index", TICK_DURATION * 2) == (1, 1,)
 
-    client.send_message("/live/clip_slot/fire", (1, 0))
-    assert client.await_message("/live/track/get/playing_slot_index", TICK_DURATION * 2) == (1, 0,)
+        client.send_message("/live/clip_slot/fire", (1, 0))
+        assert client.await_message("/live/track/get/playing_slot_index", TICK_DURATION * 2) == (1, 0,)
 
-    client.send_message("/live/track/stop_listen/playing_slot_index", (0,))
-    client.send_message("/live/track/stop_listen/playing_slot_index", (1,))
+        client.send_message("/live/track/stop_listen/playing_slot_index", (0,))
+        client.send_message("/live/track/stop_listen/playing_slot_index", (1,))
 
-    for track_id, clip_id in itertools.product((0, 1), (0, 1)):
-        client.send_message("/live/clip_slot/delete_clip", (track_id, clip_id))
+    finally:
+        for track_id, clip_id in itertools.product((0, 1), (0, 1)):
+            client.send_message("/live/clip_slot/delete_clip", (track_id, clip_id))
+        client.send_message("/live/song/stop_playing")
+    
+    

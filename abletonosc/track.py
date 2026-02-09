@@ -29,115 +29,59 @@ class TrackHandler(AbletonOSCHandler):
 
             return track_callback
 
-        methods = [
-            "delete_device",
-            "stop_all_clips",
-            "create_audio_clip",
-            "create_midi_clip",
-        ]
-        properties_r = [
-            "can_be_armed",
-            "fired_slot_index",
-            "has_audio_input",
-            "has_audio_output",
-            "has_midi_input",
-            "has_midi_output",
-            "is_foldable",
-            "is_grouped",
-            "is_visible",
-            "output_meter_level",
-            "output_meter_left",
-            "output_meter_right",
-            "playing_slot_index",
-        ]
-        properties_rw = [
-            "arm",
-            "color",
-            "color_index",
-            "current_monitoring_state",
-            "fold_state",
-            "mute",
-            "solo",
-            "name"
-        ]
-
-        for method in methods:
-            self.osc_server.add_handler("/live/track/%s" % method,
-                                        create_track_callback(self._call_method, method))
-
-        for prop in properties_r + properties_rw:
-            self.osc_server.add_handler("/live/track/get/%s" % prop,
-                                        create_track_callback(self._get_property, prop))
-            self.osc_server.add_handler("/live/track/start_listen/%s" % prop,
-                                        create_track_callback(self._start_listen, prop, include_track_id=True))
-            self.osc_server.add_handler("/live/track/stop_listen/%s" % prop,
-                                        create_track_callback(self._stop_listen, prop, include_track_id=True))
-        for prop in properties_rw:
-            self.osc_server.add_handler("/live/track/set/%s" % prop,
-                                        create_track_callback(self._set_property, prop))
-
-        #--------------------------------------------------------------------------------
-        # Volume, panning and send are properties of the track's mixer_device so
-        # can't be formulated as normal callbacks that reference properties of track.
-        #--------------------------------------------------------------------------------
-        mixer_properties_rw = ["volume", "panning"]
-        for prop in mixer_properties_rw:
-            self.osc_server.add_handler("/live/track/get/%s" % prop,
-                                        create_track_callback(self._get_mixer_property, prop))
-            self.osc_server.add_handler("/live/track/set/%s" % prop,
-                                        create_track_callback(self._set_mixer_property, prop))
-            self.osc_server.add_handler("/live/track/start_listen/%s" % prop,
-                                        create_track_callback(self._start_mixer_listen, prop, include_track_id=True))
-            self.osc_server.add_handler("/live/track/stop_listen/%s" % prop,
-                                        create_track_callback(self._stop_mixer_listen, prop, include_track_id=True))
-
-        # Still need to fix these
-        # Might want to find a better approach that unifies volume and sends
-        def track_get_send(track, params: Tuple[Any] = ()):
-            send_id, = params
-            return send_id, track.mixer_device.sends[send_id].value
-
-        def track_set_send(track, params: Tuple[Any] = ()):
-            send_id, value = params
-            track.mixer_device.sends[send_id].value = value
-
-        self.osc_server.add_handler("/live/track/get/send", create_track_callback(track_get_send))
-        self.osc_server.add_handler("/live/track/set/send", create_track_callback(track_set_send))
-
-        def track_delete_clip(track, params: Tuple[Any]):
-            clip_index, = params
-            track.clip_slots[clip_index].delete_clip()
-
-        self.osc_server.add_handler("/live/track/delete_clip", create_track_callback(track_delete_clip))
-
-        def track_get_clip_names(track, _):
-            return tuple(clip_slot.clip.name if clip_slot.clip else None for clip_slot in track.clip_slots)
-
-        def track_get_clip_lengths(track, _):
-            return tuple(clip_slot.clip.length if clip_slot.clip else None for clip_slot in track.clip_slots)
-
-        def track_get_clip_colors(track, _):
-            return tuple(clip_slot.clip.color if clip_slot.clip else None for clip_slot in track.clip_slots)
-
-        def track_get_arrangement_clip_names(track, _):
-            return tuple(clip.name for clip in track.arrangement_clips)
-
-        def track_get_arrangement_clip_lengths(track, _):
-            return tuple(clip.length for clip in track.arrangement_clips)
-
-        def track_get_arrangement_clip_start_times(track, _):
-            return tuple(clip.start_time for clip in track.arrangement_clips)
-
-        """
-        Returns a list of clip properties, or Nil if clip is empty
-        """
-        self.osc_server.add_handler("/live/track/get/clips/name", create_track_callback(track_get_clip_names))
-        self.osc_server.add_handler("/live/track/get/clips/length", create_track_callback(track_get_clip_lengths))
-        self.osc_server.add_handler("/live/track/get/clips/color", create_track_callback(track_get_clip_colors))
-        self.osc_server.add_handler("/live/track/get/arrangement_clips/name", create_track_callback(track_get_arrangement_clip_names))
-        self.osc_server.add_handler("/live/track/get/arrangement_clips/length", create_track_callback(track_get_arrangement_clip_lengths))
-        self.osc_server.add_handler("/live/track/get/arrangement_clips/start_time", create_track_callback(track_get_arrangement_clip_start_times))
-
+        methods = {
+            "delete_device":                    {"alias": 0, "caller": 1},
+            "delete_clip":                      {"alias": 0, "caller": "track_delete_clip"},  # Shortcut to clip slot delete
+            "stop_all_clips":                   {"alias": 0, "caller": 1},
+            "duplicate_clip_to_arrangement":    {"alias": 0, "caller": "track_duplicate_clip_to_arrangement"},
+        }
+        properties = {
+            "can_be_armed":             {"get": 1, "set": 0, "listen": 0},  # listener removed
+            "fired_slot_index":         {"get": 1, "set": 0, "listen": 1},
+            "has_audio_input":          {"get": 1, "set": 0, "listen": 1},
+            "has_audio_output":         {"get": 1, "set": 0, "listen": 1},
+            "has_midi_input":           {"get": 1, "set": 0, "listen": 1},
+            "has_midi_output":          {"get": 1, "set": 0, "listen": 1},
+            "is_foldable":              {"get": 1, "set": 0, "listen": 0},  # listener removed
+            "is_grouped":               {"get": 1, "set": 0, "listen": 0},  # listener removed
+            "is_visible":               {"get": 1, "set": 0, "listen": 0},  # listener removed
+            "output_meter_level":       {"get": 1, "set": 0, "listen": 1},
+            "output_meter_left":        {"get": 1, "set": 0, "listen": 1},
+            "output_meter_right":       {"get": 1, "set": 0, "listen": 1},
+            "playing_slot_index":       {"get": 1, "set": 0, "listen": 1},
+            "arm":                      {"get": 1, "set": 1, "listen": 1},
+            "color":                    {"get": 1, "set": 1, "listen": 1},
+            "color_index":              {"get": 1, "set": 1, "listen": 1},
+            "current_monitoring_state": {"get": 1, "set": 1, "listen": 1},
+            "fold_state":               {"get": 1, "set": 1, "listen": 0},  # listener removed
+            "mute":                     {"get": 1, "set": 1, "listen": 1},
+            "solo":                     {"get": 1, "set": 1, "listen": 1},
+            "name":                     {"get": 1, "set": 1, "listen": 1},
+            # Clip lists
+            "clips/name":                   {"get": "track_get_clip_names", "set": 0, "listen": 0},
+            "clips/length":                 {"get": "track_get_clip_lengths", "set": 0, "listen": 0},
+            "clips/color":                  {"get": "track_get_clip_colors", "set": 0, "listen": 0},
+            "arrangement_clips/name":       {"get": "track_get_arrangement_clip_names", "set": 0, "listen": 0},
+            "arrangement_clips/length":     {"get": "track_get_arrangement_clip_lengths", "set": 0, "listen": 0},
+            "arrangement_clips/start_time": {"get": "track_get_arrangement_clip_start_times", "set": 0, "listen": 0},
+            # Device lists
+            "num_devices":                  {"get": "track_get_num_devices", "set": 0, "listen": 0},
+            "devices/name":                 {"get": "track_get_device_names", "set": 0, "listen": 0},
+            "devices/type":                 {"get": "track_get_device_types", "set": 0, "listen": 0},
+            "devices/class_name":           {"get": "track_get_device_class_names", "set": 0, "listen": 0},
+            "devices/can_have_chains":      {"get": "track_get_device_can_have_chains", "set": 0, "listen": 0},
+            # Routing
+            "available_output_routing_types":       {"get": "track_get_available_output_routing_types", "set": 0, "listen": 0},
+            "available_output_routing_channels":    {"get": "track_get_available_output_routing_channels", "set": 0, "listen": 0},
+            "output_routing_type":                  {"get": "track_get_output_routing_type", "set": "track_set_output_routing_type", "listen": 0},
+            "output_routing_channel":               {"get": "track_get_output_routing_channel", "set": "track_set_output_routing_channel", "listen": 0},
+            "available_input_routing_types":        {"get": "track_get_available_input_routing_types", "set": 0, "listen": 0},
+            "available_input_routing_channels":     {"get": "track_get_available_input_routing_channels", "set": 0, "listen": 0},
+            "input_routing_type":                   {"get": "track_get_input_routing_type", "set": "track_set_input_routing_type", "listen": 0},
+            "input_routing_channel":                {"get": "track_get_input_routing_channel", "set": "track_set_input_routing_channel", "listen": 0},
+            
+        }
+        
         def track_duplicate_clip_to_arrangement(track, params):
             """
             Duplicate a session clip to arrangement view at a specific time.
@@ -148,35 +92,48 @@ class TrackHandler(AbletonOSCHandler):
             clip_slot = track.clip_slots[clip_slot_index]
             if clip_slot.clip:
                 track.duplicate_clip_to_arrangement(clip_slot.clip, time)
+        
+        """
+        Shortcut to clip slot delete
+        """
+        def track_delete_clip(track, params: Tuple[Any]):
+            clip_index, = params
+            track.clip_slots[clip_index].delete_clip()
 
-        self.osc_server.add_handler("/live/track/duplicate_clip_to_arrangement", create_track_callback(track_duplicate_clip_to_arrangement))
 
+        #--------------------------------------------------------------------------------
+        # Track.[Arrangement_]Clip: List Properties
+        #--------------------------------------------------------------------------------
+        def track_get_clip_names(track, _):
+            return tuple(clip_slot.clip.name if clip_slot.clip else None for clip_slot in track.clip_slots)
+        def track_get_clip_lengths(track, _):
+            return tuple(clip_slot.clip.length if clip_slot.clip else None for clip_slot in track.clip_slots)
+        def track_get_clip_colors(track, _):
+            return tuple(clip_slot.clip.color if clip_slot.clip else None for clip_slot in track.clip_slots)
+        def track_get_arrangement_clip_names(track, _):
+            return tuple(clip.name for clip in track.arrangement_clips)
+        def track_get_arrangement_clip_lengths(track, _):
+            return tuple(clip.length for clip in track.arrangement_clips)
+        def track_get_arrangement_clip_start_times(track, _):
+            return tuple(clip.start_time for clip in track.arrangement_clips)
+        
+        #--------------------------------------------------------------------------------
+        # Track.Device: List Properties
+        # - name: the device's human-readable name
+        # - type: 0 = audio_effect, 1 = instrument, 2 = midi_effect
+        # - class_name: e.g. Operator, Reverb, AuPluginDevice, PluginDevice, InstrumentGroupDevice
+        #--------------------------------------------------------------------------------
         def track_get_num_devices(track, _):
             return len(track.devices),
-
         def track_get_device_names(track, _):
             return tuple(device.name for device in track.devices)
-
         def track_get_device_types(track, _):
             return tuple(device.type for device in track.devices)
-
         def track_get_device_class_names(track, _):
             return tuple(device.class_name for device in track.devices)
-
         def track_get_device_can_have_chains(track, _):
             return tuple(device.can_have_chains for device in track.devices)
-
-        """
-         - name: the device's human-readable name
-         - type: 0 = audio_effect, 1 = instrument, 2 = midi_effect
-         - class_name: e.g. Operator, Reverb, AuPluginDevice, PluginDevice, InstrumentGroupDevice
-        """
-        self.osc_server.add_handler("/live/track/get/num_devices", create_track_callback(track_get_num_devices))
-        self.osc_server.add_handler("/live/track/get/devices/name", create_track_callback(track_get_device_names))
-        self.osc_server.add_handler("/live/track/get/devices/type", create_track_callback(track_get_device_types))
-        self.osc_server.add_handler("/live/track/get/devices/class_name", create_track_callback(track_get_device_class_names))
-        self.osc_server.add_handler("/live/track/get/devices/can_have_chains", create_track_callback(track_get_device_can_have_chains))
-
+        
         #--------------------------------------------------------------------------------
         # Track: Output routing.
         # An output route has a type (e.g. "Ext. Out") and a channel (e.g. "1/2").
@@ -206,13 +163,6 @@ class TrackHandler(AbletonOSCHandler):
                     return
             self.logger.warning("Couldn't find output routing channel: %s" % channel_name)
 
-        self.osc_server.add_handler("/live/track/get/available_output_routing_types", create_track_callback(track_get_available_output_routing_types))
-        self.osc_server.add_handler("/live/track/get/available_output_routing_channels", create_track_callback(track_get_available_output_routing_channels))
-        self.osc_server.add_handler("/live/track/get/output_routing_type", create_track_callback(track_get_output_routing_type))
-        self.osc_server.add_handler("/live/track/set/output_routing_type", create_track_callback(track_set_output_routing_type))
-        self.osc_server.add_handler("/live/track/get/output_routing_channel", create_track_callback(track_get_output_routing_channel))
-        self.osc_server.add_handler("/live/track/set/output_routing_channel", create_track_callback(track_set_output_routing_channel))
-
         #--------------------------------------------------------------------------------
         # Track: Input routing.
         #--------------------------------------------------------------------------------
@@ -239,12 +189,111 @@ class TrackHandler(AbletonOSCHandler):
                     return
             self.logger.warning("Couldn't find input routing channel: %s" % channel_name)
 
-        self.osc_server.add_handler("/live/track/get/available_input_routing_types", create_track_callback(track_get_available_input_routing_types))
-        self.osc_server.add_handler("/live/track/get/available_input_routing_channels", create_track_callback(track_get_available_input_routing_channels))
-        self.osc_server.add_handler("/live/track/get/input_routing_type", create_track_callback(track_get_input_routing_type))
-        self.osc_server.add_handler("/live/track/set/input_routing_type", create_track_callback(track_set_input_routing_type))
-        self.osc_server.add_handler("/live/track/get/input_routing_channel", create_track_callback(track_get_input_routing_channel))
-        self.osc_server.add_handler("/live/track/set/input_routing_channel", create_track_callback(track_set_input_routing_channel))
+        # Add Handlers
+        local_funcs = locals()
+        for method, spec in methods.items():
+            alias = spec.get("alias")
+            caller = spec.get("caller")
+            if not caller:
+                continue
+            if not alias and isinstance(caller, str):
+                caller = local_funcs[caller]
+                self.osc_server.add_handler("/live/track/%s" % method,
+                                            create_track_callback(caller))
+            else:
+                if not alias:
+                    caller = method
+                self.osc_server.add_handler("/live/track/%s" % method,
+                                            create_track_callback(self._call_method, caller))
+
+        for prop, spec in properties.items():
+            getter_func = spec.get("get")
+            if getter_func in (True, 1):
+                self.osc_server.add_handler("/live/track/get/%s" % prop,
+                                            create_track_callback(self._get_property, prop))
+            elif isinstance(getter_func, str):
+                getter = local_funcs[getter_func]
+                self.osc_server.add_handler("/live/track/get/%s" % prop,
+                                            create_track_callback(getter))
+
+            setter_func = spec.get("set")
+            if setter_func in (True, 1):
+                self.osc_server.add_handler("/live/track/set/%s" % prop,
+                                            create_track_callback(self._set_property, prop))
+            elif isinstance(setter_func, str):
+                setter = local_funcs[setter_func]
+                self.osc_server.add_handler("/live/track/set/%s" % prop,
+                                            create_track_callback(setter))
+
+            observable = spec.get("listen")
+            if observable:
+                self.osc_server.add_handler("/live/track/start_listen/%s" % prop,
+                                            create_track_callback(self._start_listen, prop, include_track_id=True))
+                self.osc_server.add_handler("/live/track/stop_listen/%s" % prop,
+                                            create_track_callback(self._stop_listen, prop, include_track_id=True))
+
+        #--------------------------------------------------------------------------------
+        # Mixer Properties
+        # Volume, panning and send are properties of the track's mixer_device so
+        # can't be formulated as normal callbacks that reference properties of track.
+        #--------------------------------------------------------------------------------
+        
+        mixer_properties = {
+            "volume":   {"get": 1, "set": 1, "listen": 1},
+            "panning":  {"get": 1, "set": 1, "listen": 1},
+            "send":     {"get": "track_get_send", "set": "track_set_send", "listen": 0},
+        }
+        
+        # Still need to fix these
+        # Might want to find a better approach that unifies volume and sends
+        def track_get_send(track, params: Tuple[Any] = ()):
+            send_id, = params
+            return send_id, track.mixer_device.sends[send_id].value
+
+        def track_set_send(track, params: Tuple[Any] = ()):
+            send_id, value = params
+            track.mixer_device.sends[send_id].value = value
+
+        def track_get_crossfade_assign(track, _params: Tuple[Any] = ()):
+            return track.mixer_device.crossfade_assign,
+
+        def track_set_crossfade_assign(track, params: Tuple[Any] = ()):
+            value, = params
+            track.mixer_device.crossfade_assign = value
+
+        def track_get_panning_mode(track, _params: Tuple[Any] = ()):
+            return track.mixer_device.panning_mode,
+
+        def track_set_panning_mode(track, params: Tuple[Any] = ()):
+            value, = params
+            track.mixer_device.panning_mode = value
+        
+        local_funcs = locals()
+        for prop, spec in mixer_properties.items():
+            getter_func = spec.get("get")
+            if getter_func in (True, 1):
+                self.osc_server.add_handler("/live/track/get/%s" % prop,
+                                            create_track_callback(self._get_mixer_property, prop))
+            elif isinstance(getter_func, str):
+                getter = local_funcs[getter_func]
+                self.osc_server.add_handler("/live/track/get/%s" % prop,
+                                            create_track_callback(getter))
+
+            setter_func = spec.get("set")
+            if setter_func in (True, 1):
+                self.osc_server.add_handler("/live/track/set/%s" % prop,
+                                            create_track_callback(self._set_mixer_property, prop))
+            elif isinstance(setter_func, str):
+                setter = local_funcs[setter_func]
+                self.osc_server.add_handler("/live/track/set/%s" % prop,
+                                            create_track_callback(setter))
+
+            observable = spec.get("listen")
+            if observable:
+                self.osc_server.add_handler("/live/track/start_listen/%s" % prop,
+                                            create_track_callback(self._start_mixer_listen, prop, include_track_id=True))
+                self.osc_server.add_handler("/live/track/stop_listen/%s" % prop,
+                                            create_track_callback(self._stop_mixer_listen, prop, include_track_id=True))
 
     def _set_mixer_property(self, target, prop, params: Tuple) -> None:
         parameter_object = getattr(target.mixer_device, prop)
