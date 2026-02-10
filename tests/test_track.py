@@ -137,6 +137,29 @@ def test_track_routing_current(client, property):
     _test_track_routing_current(client, track_id, property)
 
 #--------------------------------------------------------------------------------
+# Test track view properties
+#--------------------------------------------------------------------------------
+
+def _toggle_view_property(client, track_id, prop):
+    msg = client.query("/live/track/view/get/%s" % prop, (track_id,))
+    assert msg[0] == track_id
+    current = msg[1]
+    if current in (0, 1, True, False):
+        new_value = 0 if current else 1
+    else:
+        new_value = current
+    client.send_message("/live/track/view/set/%s" % prop, (track_id, new_value))
+    wait_one_tick()
+    msg = client.query("/live/track/view/get/%s" % prop, (track_id,))
+    assert msg == (track_id, new_value)
+
+def test_track_view_properties(client):
+    track_id = 2
+    msg = client.query("/live/track/view/get/device_insert_mode", (track_id,))
+    assert msg[0] == track_id
+    _toggle_view_property(client, track_id, "is_collapsed")
+
+#--------------------------------------------------------------------------------
 # Test track properties - clips
 #--------------------------------------------------------------------------------
 

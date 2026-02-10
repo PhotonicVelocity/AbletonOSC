@@ -420,3 +420,69 @@ class TrackHandler(AbletonOSCHandler):
             del self.listener_functions[listener_key]
         else:
             self.logger.warning("No listener function found for property: %s (%s)" % (prop, str(params)))
+
+
+class TrackViewHandler(AbletonOSCHandler):
+    def __init__(self, manager):
+        super().__init__(manager)
+        self.class_identifier = "track_view"
+
+    def init_api(self):
+        def create_track_view_callback(func: Callable,
+                                       *args,
+                                       pass_track_index: bool = False):
+            def view_callback(params: Tuple[Any]) -> Tuple:
+                if params[0] == "*":
+                    track_indices = list(range(len(self.song.tracks)))
+                else:
+                    track_indices = [int(params[0])]
+
+                for track_index in track_indices:
+                    track = self.song.tracks[track_index]
+                    view = track.view
+                    if pass_track_index:
+                        rv = func(view, *args, tuple(params[0:]))
+                    else:
+                        rv = func(view, *args, tuple(params[1:]))
+                    if rv is not None:
+                        return (track_index, *rv)
+
+            return view_callback
+
+        methods = {
+            # No methods yet
+        }
+
+        properties = {
+            "canonical_parent":   {"get": 0, "set": 0, "listen": 0},  # Track object, not serializable
+            "device_insert_mode": {"get": 1, "set": 0, "listen": 0},  # Get/Listen only per API
+            "is_collapsed":       {"get": 1, "set": 1, "listen": 0},
+            "selected_device":    {"get": 0, "set": 0, "listen": 0},  # Device object, not serializable
+        }
+
+        for method, spec in methods.items():
+            caller = spec.get("caller")
+            alias = spec.get("alias")
+            if not caller:
+                continue
+            target = caller if alias else method
+            self.osc_server.add_handler("/live/track/view/%s" % method,
+                                        create_track_view_callback(self._call_method, target))
+
+        for prop, spec in properties.items():
+            getter_func = spec.get("get")
+            if getter_func:
+                self.osc_server.add_handler("/live/track/view/get/%s" % prop,
+                                            create_track_view_callback(self._get_property, prop))
+
+            setter_func = spec.get("set")
+            if setter_func:
+                self.osc_server.add_handler("/live/track/view/set/%s" % prop,
+                                            create_track_view_callback(self._set_property, prop))
+
+            listen_func = spec.get("listen")
+            if listen_func:
+                self.osc_server.add_handler("/live/track/view/start_listen/%s" % prop,
+                                            create_track_view_callback(self._start_listen, prop, pass_track_index=True))
+                self.osc_server.add_handler("/live/track/view/stop_listen/%s" % prop,
+                                            create_track_view_callback(self._stop_listen, prop, pass_track_index=True))
