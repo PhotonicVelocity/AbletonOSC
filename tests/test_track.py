@@ -223,6 +223,29 @@ def test_track_duplicate_clip_to_arrangement(client):
     client.send_message("/live/track/delete/arrangement_clip", (track_id, clip_id))
 
 #--------------------------------------------------------------------------------
+# Test track methods - duplicate clip slot
+#--------------------------------------------------------------------------------
+
+def test_track_duplicate_clip_slot(client):
+    track_id = 0
+    source_clip_id = 0
+    target_clip_id = 1
+    try:
+        client.send_message("/live/clip_slot/create_clip", (track_id, source_clip_id, 4.0))
+        wait_one_tick()
+        client.send_message("/live/clip/set/name", (track_id, source_clip_id, "Alpha"))
+        wait_one_tick()
+
+        client.send_message("/live/track/duplicate/clip_slot", (track_id, source_clip_id))
+        wait_one_tick()
+
+        name = client.query("/live/clip/get/name", (track_id, target_clip_id))
+        assert name == (track_id, target_clip_id, "Alpha")
+    finally:
+        client.send_message("/live/clip_slot/delete_clip", (track_id, source_clip_id))
+        client.send_message("/live/clip_slot/delete_clip", (track_id, target_clip_id))
+
+#--------------------------------------------------------------------------------
 # Test track methods - create arrangment clips
 #--------------------------------------------------------------------------------
 
@@ -243,6 +266,22 @@ def test_track_create_arrangement_midi_clip(client):
             if t is not None and math.isclose(t, start_time, abs_tol=1e-4):
                 client.send_message("/live/track/delete/arrangement_clip", (track_id, i))
                 break
+
+#--------------------------------------------------------------------------------
+# Test track methods - jump in running session clip
+#--------------------------------------------------------------------------------
+
+def test_track_jump_in_running_session_clip(client):
+    track_id = 0
+    clip_id = 0
+    try:
+        client.send_message("/live/clip_slot/create_clip", (track_id, clip_id, 4.0))
+        client.send_message("/live/clip_slot/fire", (track_id, clip_id))
+        wait_one_tick()
+        client.send_message("/live/track/jump_in_running_session_clip", (track_id, 0.5))
+        wait_one_tick()
+    finally:
+        client.send_message("/live/clip_slot/delete_clip", (track_id, clip_id))
 
 def test_track_create_arrangement_audio_clip(client, silent_audio_file):
     track_id = 2

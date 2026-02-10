@@ -39,9 +39,11 @@ class TrackHandler(AbletonOSCHandler):
             "delete/clip":                      {"alias": 0, "caller": "track_delete_clip"},
             "delete/arrangement_clip":          {"alias": 0, "caller": "track_delete_arrangement_clip"},
             "duplicate/clip_to_arrangement":    {"alias": 0, "caller": "track_duplicate_clip_to_arrangement"},
+            "duplicate/clip_slot":              {"alias": 1, "caller": "duplicate_clip_slot"},
             "stop/all_clips":                   {"alias": 1, "caller": "stop_all_clips"},
             "create/audio_clip":                {"alias": 1, "caller": "create_audio_clip"},
             "create/midi_clip":                 {"alias": 1, "caller": "create_midi_clip"},
+            "jump_in_running_session_clip":     {"alias": 0, "caller": 1},
         }
         properties = {
             "can_be_armed":             {"get": 1, "set": 0, "listen": 0},  # listener removed
