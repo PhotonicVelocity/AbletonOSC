@@ -97,6 +97,46 @@ def test_track_get_send(client):
         assert client.query("/live/track/get/send", (track_id, send_id)) == (track_id, send_id, value,)
 
 #--------------------------------------------------------------------------------
+# Test track properties - routing
+#--------------------------------------------------------------------------------
+
+def _test_track_routing_current(client, track_id, property):
+    rv = client.query("/live/track/get/%s" % property, [track_id])
+    assert rv[0] == track_id
+    if len(rv) < 2 or rv[1] in (None, ""):
+        return
+    client.send_message("/live/track/set/%s" % property, [track_id, rv[1]])
+    wait_one_tick()
+    assert client.query("/live/track/get/%s" % property, [track_id]) == (track_id, rv[1],)
+
+@pytest.mark.parametrize(
+    "property",
+    [
+        "input_routings",
+        "input_sub_routings",
+        "output_routings",
+        "output_sub_routings",
+    ],
+)
+def test_track_routing_lists(client, property):
+    track_id = 2
+    rv = client.query("/live/track/get/%s" % property, [track_id])
+    assert rv[0] == track_id
+
+@pytest.mark.parametrize(
+    "property",
+    [
+        "current_input_routing",
+        "current_input_sub_routing",
+        "current_output_routing",
+        "current_output_sub_routing",
+    ],
+)
+def test_track_routing_current(client, property):
+    track_id = 2
+    _test_track_routing_current(client, track_id, property)
+
+#--------------------------------------------------------------------------------
 # Test track properties - clips
 #--------------------------------------------------------------------------------
 

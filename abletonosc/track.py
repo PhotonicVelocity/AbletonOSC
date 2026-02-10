@@ -99,6 +99,14 @@ class TrackHandler(AbletonOSCHandler):
             "available_input_routing_channels":     {"get": "track_get_available_input_routing_channels", "set": 0, "listen": 0},
             "input_routing_type":                   {"get": "track_get_input_routing_type", "set": "track_set_input_routing_type", "listen": 0},
             "input_routing_channel":                {"get": "track_get_input_routing_channel", "set": "track_set_input_routing_channel", "listen": 0},
+            "input_routings":                       {"get": "track_get_input_routings", "set": 0, "listen": 0},
+            "input_sub_routings":                   {"get": "track_get_input_sub_routings", "set": 0, "listen": 0},
+            "current_input_routing":                {"get": "track_get_current_input_routing", "set": "track_set_current_input_routing", "listen": 0},
+            "current_input_sub_routing":            {"get": "track_get_current_input_sub_routing", "set": "track_set_current_input_sub_routing", "listen": 0},
+            "output_routings":                      {"get": "track_get_output_routings", "set": 0, "listen": 0},
+            "output_sub_routings":                  {"get": "track_get_output_sub_routings", "set": 0, "listen": 0},
+            "current_output_routing":               {"get": "track_get_current_output_routing", "set": "track_set_current_output_routing", "listen": 0},
+            "current_output_sub_routing":           {"get": "track_get_current_output_sub_routing", "set": "track_set_current_output_sub_routing", "listen": 0},
             
         }
         
@@ -164,10 +172,17 @@ class TrackHandler(AbletonOSCHandler):
         # Since Live 10, both of these need to be set by reference to the appropriate
         # item in the available_output_routing_types vector.
         #--------------------------------------------------------------------------------
+        def _routing_display_names(items) -> Tuple[str, ...]:
+            names = []
+            for item in items:
+                name = getattr(item, "display_name", None)
+                names.append(name if name is not None else str(item))
+            return tuple(names)
+
         def track_get_available_output_routing_types(track, _):
-            return tuple([routing_type.display_name for routing_type in track.available_output_routing_types])
+            return _routing_display_names(track.available_output_routing_types)
         def track_get_available_output_routing_channels(track, _):
-            return tuple([routing_channel.display_name for routing_channel in track.available_output_routing_channels])
+            return _routing_display_names(track.available_output_routing_channels)
         def track_get_output_routing_type(track, _):
             return track.output_routing_type.display_name,
         def track_set_output_routing_type(track, params):
@@ -186,14 +201,28 @@ class TrackHandler(AbletonOSCHandler):
                     track.output_routing_channel = channel
                     return
             self.logger.warning("Couldn't find output routing channel: %s" % channel_name)
+        def track_get_output_routings(track, _):
+            return _routing_display_names(track.output_routings)
+        def track_get_output_sub_routings(track, _):
+            return _routing_display_names(track.output_sub_routings)
+        def track_get_current_output_routing(track, _):
+            return track.current_output_routing,
+        def track_set_current_output_routing(track, params):
+            routing_name = str(params[0])
+            track.current_output_routing = routing_name
+        def track_get_current_output_sub_routing(track, _):
+            return track.current_output_sub_routing,
+        def track_set_current_output_sub_routing(track, params):
+            routing_name = str(params[0])
+            track.current_output_sub_routing = routing_name
 
         #--------------------------------------------------------------------------------
         # Track: Input routing.
         #--------------------------------------------------------------------------------
         def track_get_available_input_routing_types(track, _):
-            return tuple([routing_type.display_name for routing_type in track.available_input_routing_types])
+            return _routing_display_names(track.available_input_routing_types)
         def track_get_available_input_routing_channels(track, _):
-            return tuple([routing_channel.display_name for routing_channel in track.available_input_routing_channels])
+            return _routing_display_names(track.available_input_routing_channels)
         def track_get_input_routing_type(track, _):
             return track.input_routing_type.display_name,
         def track_set_input_routing_type(track, params):
@@ -212,6 +241,20 @@ class TrackHandler(AbletonOSCHandler):
                     track.input_routing_channel = channel
                     return
             self.logger.warning("Couldn't find input routing channel: %s" % channel_name)
+        def track_get_input_routings(track, _):
+            return _routing_display_names(track.input_routings)
+        def track_get_input_sub_routings(track, _):
+            return _routing_display_names(track.input_sub_routings)
+        def track_get_current_input_routing(track, _):
+            return track.current_input_routing,
+        def track_set_current_input_routing(track, params):
+            routing_name = str(params[0])
+            track.current_input_routing = routing_name
+        def track_get_current_input_sub_routing(track, _):
+            return track.current_input_sub_routing,
+        def track_set_current_input_sub_routing(track, params):
+            routing_name = str(params[0])
+            track.current_input_sub_routing = routing_name
 
         # Add Handlers
         local_funcs = locals()
