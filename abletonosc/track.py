@@ -34,26 +34,46 @@ class TrackHandler(AbletonOSCHandler):
             "delete_clip":                      {"alias": 0, "caller": "track_delete_clip"},  # Shortcut to clip slot delete
             "stop_all_clips":                   {"alias": 0, "caller": 1},
             "duplicate_clip_to_arrangement":    {"alias": 0, "caller": "track_duplicate_clip_to_arrangement"},
+            # New
+            "delete/device":                    {"alias": 1, "caller": "delete_device"},
+            "delete/clip":                      {"alias": 0, "caller": "track_delete_clip"},
+            "delete/arrangement_clip":          {"alias": 0, "caller": "track_delete_arrangement_clip"},
+            "duplicate/clip_to_arrangement":    {"alias": 0, "caller": "track_duplicate_clip_to_arrangement"},
+            "stop/all_clips":                   {"alias": 1, "caller": "stop_all_clips"},
+            "create/audio_clip":                {"alias": 1, "caller": "create_audio_clip"},
+            "create/midi_clip":                 {"alias": 1, "caller": "create_midi_clip"},
         }
         properties = {
             "can_be_armed":             {"get": 1, "set": 0, "listen": 0},  # listener removed
+            "can_be_frozen":            {"get": 1, "set": 0, "listen": 0},
+            "can_show_chains":          {"get": 1, "set": 0, "listen": 0},
             "fired_slot_index":         {"get": 1, "set": 0, "listen": 1},
             "has_audio_input":          {"get": 1, "set": 0, "listen": 1},
             "has_audio_output":         {"get": 1, "set": 0, "listen": 1},
             "has_midi_input":           {"get": 1, "set": 0, "listen": 1},
             "has_midi_output":          {"get": 1, "set": 0, "listen": 1},
+            "input_meter_level":        {"get": 1, "set": 0, "listen": 1},
+            "input_meter_left":         {"get": 1, "set": 0, "listen": 1},
+            "input_meter_right":        {"get": 1, "set": 0, "listen": 1},
             "is_foldable":              {"get": 1, "set": 0, "listen": 0},  # listener removed
+            "is_frozen":                {"get": 1, "set": 0, "listen": 1},
             "is_grouped":               {"get": 1, "set": 0, "listen": 0},  # listener removed
+            "is_part_of_selection":     {"get": 1, "set": 0, "listen": 0},
             "is_visible":               {"get": 1, "set": 0, "listen": 0},  # listener removed
+            "muted_via_solo":           {"get": 1, "set": 0, "listen": 1},
             "output_meter_level":       {"get": 1, "set": 0, "listen": 1},
             "output_meter_left":        {"get": 1, "set": 0, "listen": 1},
             "output_meter_right":       {"get": 1, "set": 0, "listen": 1},
+            "performance_impact":       {"get": 1, "set": 0, "listen": 1},
             "playing_slot_index":       {"get": 1, "set": 0, "listen": 1},
             "arm":                      {"get": 1, "set": 1, "listen": 1},
+            "back_to_arranger":         {"get": 1, "set": 1, "listen": 1},
             "color":                    {"get": 1, "set": 1, "listen": 1},
             "color_index":              {"get": 1, "set": 1, "listen": 1},
             "current_monitoring_state": {"get": 1, "set": 1, "listen": 1},
             "fold_state":               {"get": 1, "set": 1, "listen": 0},  # listener removed
+            "implicit_arm":             {"get": 1, "set": 1, "listen": 1},
+            "is_showing_chains":        {"get": 1, "set": 1, "listen": 1},
             "mute":                     {"get": 1, "set": 1, "listen": 1},
             "solo":                     {"get": 1, "set": 1, "listen": 1},
             "name":                     {"get": 1, "set": 1, "listen": 1},
@@ -93,12 +113,16 @@ class TrackHandler(AbletonOSCHandler):
             if clip_slot.clip:
                 track.duplicate_clip_to_arrangement(clip_slot.clip, time)
         
-        """
-        Shortcut to clip slot delete
-        """
+
         def track_delete_clip(track, params: Tuple[Any]):
             clip_index, = params
             track.clip_slots[clip_index].delete_clip()
+            
+        def track_delete_arrangement_clip(track, params):
+            clip_index, = params
+            clip = track.arrangement_clips[clip_index]
+            track.delete_clip(clip)
+
 
 
         #--------------------------------------------------------------------------------
@@ -242,6 +266,15 @@ class TrackHandler(AbletonOSCHandler):
             "volume":   {"get": 1, "set": 1, "listen": 1},
             "panning":  {"get": 1, "set": 1, "listen": 1},
             "send":     {"get": "track_get_send", "set": "track_set_send", "listen": 0},
+            # New
+            # "cue_volume":         {"get": 1, "set": 1, "listen": 1, "kind": "param"},  # main track only
+            # "crossfader":         {"get": 1, "set": 1, "listen": 1, "kind": "param"},  # main track only
+            # "song_tempo":         {"get": 1, "set": 1, "listen": 1, "kind": "param"},  # main track only
+            "track_activator":    {"get": 1, "set": 1, "listen": 1, "kind": "param"},
+            "left_split_stereo":  {"get": 1, "set": 1, "listen": 1, "kind": "param"},
+            "right_split_stereo": {"get": 1, "set": 1, "listen": 1, "kind": "param"},
+            "crossfade_assign":   {"get": 1, "set": 1, "listen": 1, "kind": "prop"},
+            "panning_mode":       {"get": 1, "set": 1, "listen": 1, "kind": "prop"},
         }
         
         # Still need to fix these
@@ -253,27 +286,14 @@ class TrackHandler(AbletonOSCHandler):
         def track_set_send(track, params: Tuple[Any] = ()):
             send_id, value = params
             track.mixer_device.sends[send_id].value = value
-
-        def track_get_crossfade_assign(track, _params: Tuple[Any] = ()):
-            return track.mixer_device.crossfade_assign,
-
-        def track_set_crossfade_assign(track, params: Tuple[Any] = ()):
-            value, = params
-            track.mixer_device.crossfade_assign = value
-
-        def track_get_panning_mode(track, _params: Tuple[Any] = ()):
-            return track.mixer_device.panning_mode,
-
-        def track_set_panning_mode(track, params: Tuple[Any] = ()):
-            value, = params
-            track.mixer_device.panning_mode = value
         
         local_funcs = locals()
         for prop, spec in mixer_properties.items():
             getter_func = spec.get("get")
+            kind = spec.get("kind", "param")
             if getter_func in (True, 1):
                 self.osc_server.add_handler("/live/track/get/%s" % prop,
-                                            create_track_callback(self._get_mixer_property, prop))
+                                            create_track_callback(self._get_mixer_property, prop, kind))
             elif isinstance(getter_func, str):
                 getter = local_funcs[getter_func]
                 self.osc_server.add_handler("/live/track/get/%s" % prop,
@@ -282,7 +302,7 @@ class TrackHandler(AbletonOSCHandler):
             setter_func = spec.get("set")
             if setter_func in (True, 1):
                 self.osc_server.add_handler("/live/track/set/%s" % prop,
-                                            create_track_callback(self._set_mixer_property, prop))
+                                            create_track_callback(self._set_mixer_property, prop, kind))
             elif isinstance(setter_func, str):
                 setter = local_funcs[setter_func]
                 self.osc_server.add_handler("/live/track/set/%s" % prop,
@@ -291,24 +311,34 @@ class TrackHandler(AbletonOSCHandler):
             observable = spec.get("listen")
             if observable:
                 self.osc_server.add_handler("/live/track/start_listen/%s" % prop,
-                                            create_track_callback(self._start_mixer_listen, prop, include_track_id=True))
+                                            create_track_callback(self._start_mixer_listen, prop, kind, include_track_id=True))
                 self.osc_server.add_handler("/live/track/stop_listen/%s" % prop,
-                                            create_track_callback(self._stop_mixer_listen, prop, include_track_id=True))
+                                            create_track_callback(self._stop_mixer_listen, prop, kind, include_track_id=True))
 
-    def _set_mixer_property(self, target, prop, params: Tuple) -> None:
-        parameter_object = getattr(target.mixer_device, prop)
-        self.logger.info("Setting property for %s: %s (new value %s)" % (self.class_identifier, prop, params[0]))
-        parameter_object.value = params[0]
+    def _set_mixer_property(self, target, prop, kind: str, params: Tuple) -> None:
+        value = params[0]
+        self.logger.info("Setting property for %s: %s (new value %s)" % (self.class_identifier, prop, value))
+        if kind == "param":
+            parameter_object = getattr(target.mixer_device, prop)
+            parameter_object.value = value
+        else:
+            setattr(target.mixer_device, prop, value)
 
-    def _get_mixer_property(self, target, prop, params: Optional[Tuple] = ()) -> Tuple[Any]:
-        parameter_object = getattr(target.mixer_device, prop)
-        self.logger.info("Getting property for %s: %s = %s" % (self.class_identifier, prop, parameter_object.value))
-        return parameter_object.value,
+    def _get_mixer_property(self, target, prop, kind: str, params: Optional[Tuple] = ()) -> Tuple[Any]:
+        if kind == "param":
+            value = getattr(target.mixer_device, prop).value
+        else:
+            value = getattr(target.mixer_device, prop)
+        self.logger.info("Getting property for %s: %s = %s" % (self.class_identifier, prop, value))
+        return (value,)
 
-    def _start_mixer_listen(self, target, prop, params: Optional[Tuple] = ()) -> None:
-        parameter_object = getattr(target.mixer_device, prop)
+    def _start_mixer_listen(self, target, prop, kind: str, params: Optional[Tuple] = ()) -> None:
+        if kind == "param":
+            parameter_object = getattr(target.mixer_device, prop)
+        else:
+            parameter_object = target.mixer_device
         def property_changed_callback():
-            value = parameter_object.value
+            value = parameter_object.value if kind == "param" else getattr(parameter_object, prop)
             self.logger.info("Property %s changed of %s %s: %s" % (prop, self.class_identifier, str(params), value))
             osc_address = "/live/%s/get/%s" % (self.class_identifier, prop)
             self.osc_server.send(osc_address, (*params, value,))
@@ -319,20 +349,31 @@ class TrackHandler(AbletonOSCHandler):
 
         self.logger.info("Adding listener for %s %s, property: %s" % (self.class_identifier, str(params), prop))
 
-        parameter_object.add_value_listener(property_changed_callback)
+        if kind == "param":
+            parameter_object.add_value_listener(property_changed_callback)
+        else:
+            add_listener_function = getattr(parameter_object, "add_%s_listener" % prop)
+            add_listener_function(property_changed_callback)
         self.listener_functions[listener_key] = property_changed_callback
         #--------------------------------------------------------------------------------
         # Immediately send the current value
         #--------------------------------------------------------------------------------
         property_changed_callback()
 
-    def _stop_mixer_listen(self, target, prop, params: Optional[Tuple[Any]] = ()) -> None:
-        parameter_object = getattr(target.mixer_device, prop)
+    def _stop_mixer_listen(self, target, prop, kind: str, params: Optional[Tuple[Any]] = ()) -> None:
+        if kind == "param":
+            parameter_object = getattr(target.mixer_device, prop)
+        else:
+            parameter_object = target.mixer_device
         listener_key = (prop, tuple(params))
         if listener_key in self.listener_functions:
             self.logger.info("Removing listener for %s %s, property %s" % (self.class_identifier, str(params), prop))
             listener_function = self.listener_functions[listener_key]
-            parameter_object.remove_value_listener(listener_function)
+            if kind == "param":
+                parameter_object.remove_value_listener(listener_function)
+            else:
+                remove_listener_function = getattr(parameter_object, "remove_%s_listener" % prop)
+                remove_listener_function(listener_function)
             del self.listener_functions[listener_key]
         else:
             self.logger.warning("No listener function found for property: %s (%s)" % (prop, str(params)))
